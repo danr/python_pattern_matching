@@ -31,47 +31,64 @@ class Match():
     >>> def var(name):
     ...     return lambda x: [(name, x)]
     >>> a, b, c, d = map(var, 'abcd')
-    >>> m==[a,b], m.matches()
+    >>> m == [a,b], m.matches()
     (False, None)
-    >>> (m.plop,)   # change this raised exception?
-    (None,)
-    >>> m==[a,b,c], m.matches()
+    >>> (m.plop,)
+    Traceback (most recent call last):
+        ...
+    ValueError: pattern didn't match
+    >>> m == [a,b,c], m.matches()
     (True, {'a': 'plop', 'b': ['flop', 1], 'c': {'glop': 2}})
     >>> m.a
     'plop'
-    >>> m==[a,b,c,d], m.matches()
+    >>> m == [a,b,c,d], m.matches()
     (False, None)
-    >>> m==[a,[b,d],c], m.b, m.d
+    >>> m == [a,[b,d],c], m.b, m.d
     (True, 'flop', 1)
-    >>> m==[a,b,{"glop":c}], m.c
+    >>> m == [a,b,{"glop":c}], m.c
     (True, 2)
-    >>> m==[a,b,{}], m==[a,b,{"flop":c}], m==[a,b,{"flop":c, "glop":d}]
+    >>> m == [a,b,{}], m == [a,b,{"flop":c}], m == [a,b,{"flop":c, "glop":d}]
     (False, False, False)
-    >>> m==['plop',a,b]
+    >>> m == ['plop',a,b]
     Traceback (most recent call last):
         ...
     ValueError: plop is not a valid pattern
-    >>> m==[MatchableString('plop'),a,b]
+    >>> (m == [a,b,{"klop":c}] or m == [a,b,{"glop":c}], m.c)
+    (True, 2)
+    >>> (m == [a,b,{"glop":c}] or m == [a,b,{"klop":c}], m.c)
+    (True, 2)
+    >>> m == [MatchableString('plop'),a,b]
     True
+    >>> m == [a,[a,_],_]
+    False
+    >>> n = Match(['plop', ['plop', 1], {"glop":2}])
+    >>> n == [a,[a,_],_], n.a
+    (True, 'plop')
     """
     def __init__(self, x):
         self.__x = x
         self.__m = None
 
     def __eq__(self, p):
+        self.__m = None
         m = match_pattern(self.__x, p)
         if m is None:
-            self.__m = None
             return False
         else:
-            self.__m = dict(m)
+            d = {}
+            for k, v in m:
+                if k in d:
+                    if d[k] != v:
+                        return False
+                d[k] = v
+            self.__m = d
             return True
 
     def __getattr__(self, s):
         if self.__m:
             return self.__m.get(s, None)
         else:
-            return None
+            raise ValueError("pattern didn't match")
 
     def matches(self):
         return self.__m
@@ -139,4 +156,19 @@ def beta(e):
         else:
             return e
 
-print(beta(App(Lam('x', App(Var('y'), Var('x'))), Lam('z', Var('z')))))
+e = App(Lam('x', App(Var('y'), Var('x'))), Lam('z', Var('z')))
+print(beta(e))
+
+def eta(e):
+    with match(e) as m:
+        if m == Lam(x, App(e1, Var(x))):
+            return eta(m.e1)
+        elif m == App(e1, e2):
+            return App(eta(m.e1), eta(m.e2))
+        elif m == Lam(x, e1):
+            return Lam(m.x, eta(m.e1))
+        else:
+            return e
+
+print(eta(e))
+print(eta(Lam('x', App(Var('f'), Var('y')))))
